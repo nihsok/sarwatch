@@ -1,0 +1,97 @@
+name: Sentinel-1 Ocean Monitor
+
+on:
+  schedule:
+    # Run every hour at 5 minutes past the hour.
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    env:
+      CDSE_USERNAME: ${{ secrets.CDSE_USERNAME }}
+      CDSE_PASSWORD: ${{ secrets.CDSE_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Search for new Sentinel-1 product
+        id: search
+        run: |
+          python src/search_s1.py
+
+      - name: Download Sentinel-1 product
+        if: steps.search.outputs.found == 'true'
+        run: |
+          python src/download_s1.py "${{ steps.search.outputs.product_id }}"
+
+      - name: Extract Sentinel-1 ZIP
+        if: steps.search.outputs.found == 'true'
+        id: extract
+        run: |
+          set -euo pipefail
+
+          ZIP="data/${{ steps.search.outputs.product_name }}.zip"
+          mkdir -p data
+
+          echo "Extracting: $ZIP"
+          unzip -q "$ZIP" -d data
+
+          SAFE="data/${{ steps.search.outputs.product_name }}"
+          test -d "$SAFE"
+
+          echo "SAFE directory: $SAFE"
+          echo "safe_dir=$SAFE" >> "$GITHUB_OUTPUT"
+
+      - name: Run vessel detection
+        if: steps.search.outputs.found == 'true'
+        run: |
+          python src/detect.py             "${{ steps.extract.outputs.safe_dir }}"             --output-dir results
+
+      - name: Mark product as processed
+        if: steps.search.outputs.found == 'true' && success()
+        run: |
+          python src/search_s1.py             --mark-processed "${{ steps.search.outputs.product_id }}"             --product-name "${{ steps.search.outputs.product_name }}"             --acquisition-time "${{ steps.search.outputs.acquisition_time }}"
+
+      - name: Commit processed state
+        if: steps.search.outputs.found == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/processed.yaml
+
+          if git diff --cached --quiet; then
+            echo "No processed-state changes to commit."
+          else
+            git commit -m "Update processed Sentinel-1 products"
+            git push
+          fi
+
+      - name: Upload detection results
+        if: always() && steps.search.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel1-detection-${{ steps.search.outputs.product_id }}
+          path: |
+            results/
+          if-no-files-found: warn
+          retention-days: 14

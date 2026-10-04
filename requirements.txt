@@ -1,0 +1,7 @@
+numpy
+scipy
+rasterio
+matplotlib
+global-land-mask
+requests
+PyYAML
