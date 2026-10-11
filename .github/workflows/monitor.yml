@@ -43,6 +43,11 @@ jobs:
         run: |
           python src/download_s1.py "${{ steps.search.outputs.product_id }}"
 
+      - name: Debug downloaded files
+        run: |
+          echo "product_name=${{ steps.search.outputs.product_name }}"
+          ls -lah data/
+
       - name: Extract Sentinel-1 ZIP
         if: steps.search.outputs.found == 'true'
         id: extract
