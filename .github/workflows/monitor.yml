@@ -49,8 +49,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          ZIP="data/${{ steps.search.outputs.product_name }}.zip"
-          ZIP="${ZIP%.SAFE}.zip"
+          ZIP="data/${{ steps.search.outputs.product_name }}"
+          ZIP="${ZIP%.SAFE}"
           mkdir -p data
 
           echo "Extracting: $ZIP"
