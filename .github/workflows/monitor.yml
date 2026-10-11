@@ -3,7 +3,7 @@ name: Sentinel-1 Ocean Monitor
 on:
   schedule:
     # Run every hour at 5 minutes past the hour.
-    - cron: "5 0 1 * *"
+    - cron: "5 * * * *"
   workflow_dispatch:
 
 permissions:
